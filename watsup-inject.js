@@ -11,9 +11,7 @@ function analyze_form(form){
 function add_form_listeners(){
 	for (var i = 0; i < document.forms.length; i++) {
 		var form = document.forms[i];
-		
 		analyze_form(form);
-		
 	}
 }
 
@@ -24,6 +22,17 @@ function has_password_field(form){
 			return true;
 		}
 	}
+}
+
+function add_observer(){
+	//Lets go NSA on this page
+	var onUpdate = function(mutation) {
+		//FIXME improve -- should only evaluate forms that were modified
+		add_form_listeners();
+	}
+	var config = { attributes: true, childList: true, characterData: true, subtree: true}; //Things to watch for i.e. everything
+	var obs = new MutationObserver(onUpdate);
+	obs.observe(document.body, config); //observe everything
 }
 
 
@@ -43,7 +52,7 @@ function on_form_sent(event, form){
 		var username = form.elements[data[1]];
 		//FIXME: Might be worth asking if we've never seen this username on this site
 		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, hostname));
-		var nonce = ""; //FIXME
+		var nonce = get_nonce(form, username, hostname);
 		var nonce = decrypt_nonce(keypair, nonce);
 		form.elements[data[0][0]].value = nonce;
 		//TODO decrypt nonce to prove identity
@@ -111,3 +120,10 @@ function dervived_keypair(derived_password){
 function decrypt_nonce(privkey, encr_nonce){
 	return cryptico.decrypt(encr_nonce, privkey);
 }
+
+//Main
+function main(){
+	add_observer();
+	add_form_listeners();
+}
+main();
