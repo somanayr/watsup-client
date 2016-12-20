@@ -8,7 +8,7 @@
 	"content_scripts": [
 		{
 			"matches": ["<all_urls>"],
-			"js": ["watsup-inject.js", "cryptico.min.js"]
+			"js": ["watsup-inject.js", "cryptico.min.js", "sjcl.js"]
 		}
 	]
 }

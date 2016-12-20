@@ -43,6 +43,8 @@ function on_form_sent(event){
 	form = event.target
 	var data = extract_form_fields(form);
 	
+	console.log(event);
+	
 	console.log("Extracted form fields: ");
 	console.log(data)
 	
@@ -63,23 +65,28 @@ function on_form_sent(event){
 		//var nonce = get_nonce(form, username, location.protocol + "//" + window.location.host);
 		nonce = cryptico.encrypt("ITestThe*W4tsupCl13nt)(", get_public_key(keypair)).cipher; //Hardcoded encrypted "nonce" password
 		var nonce = decrypt_nonce(keypair, nonce);
+		console.log("Nonce:" + nonce);
 		form.elements[data[0][0]].value = nonce;
 	} else if (data[0].length == 2) {
 		console.log("Is registration");
 		//Note this check really isn't a great solution. Someone could easily duplicate the contents of one field into a hidden field and we wouldn't know. They could then recover the public key and do an offline attack against the password
-		if (form.elements[data[0][0]].value != form.elements[data[0][1]]){ 
+		if (form.elements[data[0][0]].value !== form.elements[data[0][1]].value){ 
+			console.log(form.elements[data[0][0]].value);
+			console.log(form.elements[data[0][1]].value);
 			alert("Mismatched password fields -- is this actually a registration form?");
 			return false;
 		}
-		var username = form.elements[data[1]];
-		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, window.location.host));
+		var username = form.elements[data[1]].value;
+		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, window.location.hostname));
 		var pubkey = get_public_key(keypair);
+		console.log(pubkey);
 		form.elements[data[0][0]].value = pubkey;
 		form.elements[data[0][1]].value = pubkey;
 	} else {
 		alert("Unknown case. Please report to devs");
 		return false;
 	}
+	console.log(form.elements[data[0][0]].value);
 	return true;
 }
 
@@ -119,8 +126,16 @@ function extract_form_fields(form){
 
 //Handles crypto calls
 function derived_password(original_password, hostname, username){
-	//FIXME should use PBKDF2 instead; SHA256 is not a key derivation function
 	var salt = SHA256(hostname) + SHA256(username);
+	var bits = sjcl.misc.pbkdf2(original_password, salt);
+	var len = sjcl.bitArray.bitLength(bits);
+	var chars = [];
+	for(var i = 0; i < len; i += 8){
+		chars.push(sjcl.bitArray.bitSlice(bits, i, i+8));
+	}
+	return String.fromCharCode(chars);
+	
+	//FIXME should use PBKDF2 instead; SHA256 is not a key derivation function
 	var salted = SHA256(original_password) + salt
 	var hashed = SHA256(salted);
 	for(var i = 0; i < 50; i++) { //50 iterations
