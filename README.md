@@ -1,5 +1,5 @@
 # watsup-client
-Browser extension implementation of the WATSUP protocol
+Browser extension implementation of the Web Authentication without Transmitting or Storing User Passwords(WATSUP) protocol.
 
 Server can be found [here](https://github.com/gwgundersen/watsup)
 

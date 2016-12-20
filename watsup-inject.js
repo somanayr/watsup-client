@@ -1,18 +1,18 @@
 //Handles form interception
 function analyze_form(form){
-	if(!has_password_field(form)) return;
-		
-	document.forms[i].addEventListener("submit", function(){
-		var form = this.form;
-		form.onsubmit = on_form_sent
-	}
+	if(!has_password_field(form)) return false;
+
+	form.onsubmit = on_form_sent;
+	return true;
 }
 
 function add_form_listeners(){
+	var count = 0;
 	for (var i = 0; i < document.forms.length; i++) {
 		var form = document.forms[i];
-		analyze_form(form);
+		if(analyze_form(form)) count++;
 	}
+	console.log("Attached listeners to " + count + " forms");
 }
 
 function has_password_field(form){
@@ -27,6 +27,7 @@ function has_password_field(form){
 function add_observer(){
 	//Lets go NSA on this page
 	var onUpdate = function(mutation) {
+		console.log("Update deteced");
 		//FIXME improve -- should only evaluate forms that were modified
 		add_form_listeners();
 	}
@@ -37,8 +38,14 @@ function add_observer(){
 
 
 //Handles swap out of form variables
-function on_form_sent(event, form){
+function on_form_sent(event){
+	console.log(event)
+	form = event.target
 	var data = extract_form_fields(form);
+	
+	console.log("Extracted form fields: ");
+	console.log(data)
+	
 	if(data[0].length == 0){
 		return true; //No action necessary, not a password form
 	}
@@ -49,21 +56,24 @@ function on_form_sent(event, form){
 		alert("More than 2 password fields");
 		return false;
 	} else if (data[0].length == 1){
-		var username = form.elements[data[1]];
+		console.log("Is login");
+		var username = form.elements[data[1]].value;
 		//FIXME: Might be worth asking if we've never seen this username on this site
-		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, hostname));
-		var nonce = get_nonce(form, username, hostname);
+		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, window.location.hostname));
+		//var nonce = get_nonce(form, username, location.protocol + "//" + window.location.host);
+		nonce = cryptico.encrypt("ITestThe*W4tsupCl13nt)(", get_public_key(keypair)).cipher; //Hardcoded encrypted "nonce" password
 		var nonce = decrypt_nonce(keypair, nonce);
 		form.elements[data[0][0]].value = nonce;
 	} else if (data[0].length == 2) {
-		//Note this check really isn't a great solution. Someone could easily duplicate the contents of one field into a hidden field and we wouldn't know
+		console.log("Is registration");
+		//Note this check really isn't a great solution. Someone could easily duplicate the contents of one field into a hidden field and we wouldn't know. They could then recover the public key and do an offline attack against the password
 		if (form.elements[data[0][0]].value != form.elements[data[0][1]]){ 
 			alert("Mismatched password fields -- is this actually a registration form?");
 			return false;
 		}
 		var username = form.elements[data[1]];
-		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, hostname));
-		var pubkey = publicKeyString(keypair);
+		var keypair = derived_keypair(derived_password(form.elements[data[0][0]].value, username, window.location.host));
+		var pubkey = get_public_key(keypair);
 		form.elements[data[0][0]].value = pubkey;
 		form.elements[data[0][1]].value = pubkey;
 	} else {
@@ -74,12 +84,12 @@ function on_form_sent(event, form){
 }
 
 function get_nonce(form, username, hostname){
-	xhr.open("POST", hostname + "/auth", false); //asynchronous
+	xhr.open("POST", hostname + "/auth", false); //synchronous
 	xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
 	xhr.send(JSON.stringify({
 		username: username,
 	}));
-	return xhr.responseText
+	return xhr.responseText;
 }
 	
 function extract_form_fields(form){
@@ -92,7 +102,7 @@ function extract_form_fields(form){
 		}
 	}
 	
-	if(password.fields.length >= 1){ //Should look for a username field
+	if(password_fields.length >= 1){ //Should look for a username field
 		//FIXME this needs to be seriously improved. Looking for the first field up could cause problems.
 		//Since the username is half of the salt, failure is very bad
 		for(var j = password_fields[0]; j >= 0; j--){ //Finds the first text field above the first password field
@@ -121,16 +131,23 @@ function derived_password(original_password, hostname, username){
 	return hashed;
 }
 
-function dervived_keypair(derived_password){
+function derived_keypair(derived_password){
 	return cryptico.generateRSAKey(derived_password, 2048); //1024 is breakable. Keys need to last a long time.
 }
 
-function decrypt_nonce(privkey, encr_nonce){
-	return cryptico.decrypt(encr_nonce, privkey);
+function decrypt_nonce(key, encr_nonce){
+	var status = cryptico.decrypt(encr_nonce, key);
+	//TODO: use signature to verify integrity
+	return status.plaintext;
+}
+
+function get_public_key(key) {
+	return cryptico.publicKeyString(key);
 }
 
 //Main
 function main(){
+	console.log("Initializing");
 	add_observer();
 	add_form_listeners();
 }
