@@ -55,7 +55,6 @@ function on_form_sent(event, form){
 		var nonce = get_nonce(form, username, hostname);
 		var nonce = decrypt_nonce(keypair, nonce);
 		form.elements[data[0][0]].value = nonce;
-		//TODO decrypt nonce to prove identity
 	} else if (data[0].length == 2) {
 		//Note this check really isn't a great solution. Someone could easily duplicate the contents of one field into a hidden field and we wouldn't know
 		if (form.elements[data[0][0]].value != form.elements[data[0][1]]){ 
@@ -72,6 +71,15 @@ function on_form_sent(event, form){
 		return false;
 	}
 	return true;
+}
+
+function get_nonce(form, username, hostname){
+	xhr.open("POST", hostname + "/auth", false); //asynchronous
+	xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+	xhr.send(JSON.stringify({
+		username: username,
+	}));
+	return xhr.responseText
 }
 	
 function extract_form_fields(form){
