@@ -4,11 +4,24 @@
 	"name": "WATSAP client",
 	"description": "Implements the WATSAP login protocol",
 	"version": "1.0",
+	
+	"permissions": [
+		"tabs"
+	],
+	
+	"browser_action": {
+		"default_popup": "popup.html",
+		"default_title": "WATSUP"
+	}
+	
+	"background": {
+		"scripts": ["background.js"]
+	}
 
 	"content_scripts": [
 		{
 			"matches": ["<all_urls>"],
-			"js": ["watsup-inject.js", "cryptico.min.js", "sjcl.js"]
+			"js": ["watsup-content.js", "cryptico.min.js", "sjcl.js"]
 		}
 	]
 }
