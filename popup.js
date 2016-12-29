@@ -16,14 +16,14 @@ function request(url, callback, method, params){
 	}
 
     var xmlHttp = new XMLHttpRequest();
-    xmlHttp.open( "GET", watsupUrl, true );
+    xmlHttp.open( "GET", url, true );
     if(params && method == "POST"){
 		// http://stackoverflow.com/a/31713191/582136
 		xmlHttp.send(Object.keys(params).map(function(key){
           return encodeURIComponent(key)+"="+encodeURIComponent(params[key]);
         }).join("&"));
 	} else {
-		xmlHTttp.send(null);
+		xmlHttp.send(null);
 	}
 	xmlHttp.onreadystatechange = function() { 
 		if (xmlHttp.readyState == 4) {
@@ -31,7 +31,17 @@ function request(url, callback, method, params){
 			errorLabelIds.forEach(function(lab) {
 				document.getElementById(lab).textContent = "";
 			});
-			var response = response = JSON.parse(xmlHttp.responseText);
+			var response;
+			try {
+				response = JSON.parse(xmlHttp.responseText);
+			} catch(e) {
+				if(!(e instanceof SyntaxError)){
+					throw e;
+				}
+				if(xmlHttp.status == 200) {
+					callback(xmlHttp.responseText, xmlHttp.status);
+				}
+			}
 			if(response.error){
 				var error_label_id = "error" + activeTab.slice(0,-4);
 				document.getElementById(error_label_id).textContent = response.error;
@@ -78,30 +88,29 @@ var encr_nonce = "";
 });*/
 
 document.getElementById("login_button")
-    .addEventListener("onclick", function(event) {
-		var username = document.getElementById("username").value;
-		request(baseurl + "/login", function(response, status){
-			encr_nonce = response.nonce;
-			var nonce = decrypt_nonce(derived_keypair(derived_password(password, window.location.hostname, username)), encr_nonce);
+    .addEventListener("click", function(event) {
+		var username = document.getElementById("login_username").value;
+		request(baseurl + "/auth", function(response, status){
+			encr_nonce = response;//response.nonce;
+			var nonce = decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, window.location.hostname, username)), encr_nonce);
 			request(baseurl + "/login", function(response, status){
 				//TODO update plugin status
 				chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
 					chrome.runtime.sendMessage({tab: tabs[0]});
 				});
-			}, "POST", {username: username, nonce: nonce});
+			}, "POST", {username: username, password: nonce});
 		}, "GET", {username: username});
 });
 
 document.getElementById("register_button")
-    .addEventListener("onclick", function(event) {
-		var username = document.getElementById("username").value;
-		var password = document.getElementById("register_password").value;
-		if(password != document.getElementById("register_password2").value) {
+    .addEventListener("click", function(event) {
+		var username = document.getElementById("register_username").value;
+		if(document.getElementById("register_password").value != document.getElementById("register_password2").value) {
 			document.getElementById("error_register_pass").textContent = "Passwords do not match";
 			return;
 		}
-		var pubkey = get_public_key(derived_keypair(derived_password(password, window.location.hostname, username)));
-		request(baseurl + "/login", function(response, status){
+		var pubkey = get_public_key(derived_keypair(derived_password(document.getElementById("register_password").value, window.location.hostname, username)));
+		request(baseurl + "/register", function(response, status){
 		}, "POST", {username: username, public_key: pubkey});
 });
 

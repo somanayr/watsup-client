@@ -26,6 +26,9 @@ var tablinks = document.getElementsByClassName("tablinks");
 for (i = 0; i < tablinks.length; i++) {
 	var tabId = tablinks[i].id.slice(0,-7);
 	console.log("Adding for tab: " + tabId);
-	//tablinks[i].a
-	tablinks[i].addEventListener("onclick", function(evt) {openTab(evt, tabId); activeTab = tabId; return false;});
+	console.log(tablinks[i]);
+	(function (tabId) {tablinks[i].addEventListener("click",function(evt) {
+		openTab(evt, tabId);
+		activeTab = tabId; return false;
+	});})(tabId);
 }

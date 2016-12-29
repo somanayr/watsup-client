@@ -1,6 +1,8 @@
 <html>
 	<head>
 		<link rel="stylesheet" href="popup.css"/>
+		<script src="cryptico.min.js"></script>
+		<script src="sjcl.js"></script>
 	</head>
 	<body style="background-color:blue;color:white">
 		<ul class="tab">
@@ -11,19 +13,21 @@
 				<a href="#" class="tablinks" id="register_tab_button">Register</a>
 			</li>
 		</ul>
+		
 		<div id="login_tab" class="tabcontent" style="display:block;">
 			<h3>Login</h3>
-			<label id="error_login"/>
-			<div>User name: <input id="login_username" type="text"/><div/><br/>
+			<label id="error_login"></label>
+			<div>User name: <input id="login_username" type="text"/></div><br/>
 			<div>Password: <input id="login_password" type="text"/></div><br/>
 			<button type="button" id="login_button">Login</button>
 		</div>
+		
 		<div id="register_tab" class="tabcontent">
 			<h3>Register</h3>
-			<label id="error_register"/>
-User name: <input id="login_username" type="text"/>
-Password: <input id="register_password" type="text"/>
-Password: (repeat) <input id="register_password2" type="text"/>
+			<label id="error_register"></label>
+			<div>User name: <input id="login_username" type="text"/></div><br/>
+			<div>Password: <input id="register_password" type="text"/></div><br/>
+			<div>Password: (repeat) <input id="register_password2" type="text"/></div><br/>
 			<button type="button" id="register_button">Register</button>
 		</div>
 
