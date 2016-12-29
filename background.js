@@ -82,3 +82,15 @@ chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
 chrome.tabs.onCreated.addListener(function(tab) {         
    onUpdate(tab);
 });
+
+chrome.runtime.onMessage.addListener(function(msg,sender,callback){
+	if(msg.tab){
+		onUpdate(msg.tab);
+	}
+});
+
+chrome.tabs.query({}, function(tabs) { 
+	tabs.forEach(function(tab) {
+		onUpdate(tab);
+	});
+} );
