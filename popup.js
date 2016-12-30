@@ -34,8 +34,8 @@ function request(url, callback, method, params, responseType){
 			}
 			var response = JSON.parse(xmlHttp.responseText);
 			if(response.Error){
-				var error_label_id = "error" + activeTab.slice(0,-4);
-				document.getElementById(error_label_id).textContent = response.Error;
+				document.getElementById("error_login").textContent = response.Error;
+				document.getElementById("error_register").textContent = response.Error;
 			} else {
 				callback(response, xmlHttp.status);
 			}
@@ -80,7 +80,8 @@ document.getElementById("login_button")
 				encr_nonce = new Uint8Array(response);//response.nonce;
 				console.log("Encrypted nonce:");console.log(encr_nonce);
 				decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, url.hostname, username)), encr_nonce, function(nonce){
-					console.log("Nonce: " + nonce);
+					console.log("Nonce: ");
+					console.log(nonce);
 					request(baseurl + "/login/", function(response, status){
 						console.log("Logged in???")
 						console.log(response);
@@ -164,25 +165,40 @@ function decrypt_nonce(key, ciphertext, callback){
 		dp:url64(key.dmp1.toString(16)),
 		dq:url64(key.dmq1.toString(16)),
 		qi:url64(key.coeff.toString(16)),
-		alg: "RSA-OAEP-256",
+		alg: "RSA-OAEP",
         ext: true,
 	};
 	console.log(jwk);
-	crypto.importKey("jwk", jwk, {name: "RSA-OAEP", hash: {name: "SHA-256"}}, false, ["decrypt"]).then(function(mykey){
+	crypto.importKey("jwk", jwk, {name: "RSA-OAEP", hash: {name: "SHA-1"}}, true, ["decrypt"]).then(function(mykey){
 		/*var ar = new Uint8Array(cyphertext.length*2);
 		for (var i=0; i<ciphertext.length; i++) {
 			console.log(ciphertext.charCodeAt(i));
 			ar[i*2] = ciphertext.charCodeAt(i);
 			ar[i*2+1] = ciphertext.charCodeAt(i)>>8;
 		}*/
+		window.crypto.subtle.exportKey("pkcs8",mykey).then(function(key_buf){
+			key_buffer = key_buf;
+			console.log(spkiToPEM(key_buffer));
+		});
 		console.log(ciphertext);
-		crypto.decrypt("RSA-OAEP", mykey, ciphertext).then(function(plaintext){
-			callback(plaintext);
+		var buf = [];
+		for(var i = 0; i < ciphertext.length; i++){
+			buf.push((Array(2).join("0") + ciphertext[i].toString(16)).substr(-2))
+		}
+		console.log(cryptico.b16to64(buf.join("")));
+		crypto.decrypt({name: "RSA-OAEP", hash: {name: "SHA-1"}}, mykey, ciphertext).then(function(_plaintext){
+			var chars = [];
+			var plaintext = new Uint8Array(_plaintext);
+			for(var i = 0; i < plaintext.length; i++){
+				chars.push(String.fromCharCode(plaintext[i]));
+			}
+			callback(plaintext.join(""));
 		}).catch(function(err){
 			console.error(err);
 		});
 	}).catch(function(err){
 		console.error(err);
+		console.error(err.stack);
 	});
 }
 
@@ -205,3 +221,37 @@ function get_public_key(key) {
 	}
 	return "-----BEGIN RSA PUBLIC KEY-----\n" + spacedKey + "-----END RSA PUBLIC KEY-----"; 
 }
+
+
+function spkiToPEM(keydata){
+    var keydataS = arrayBufferToString(keydata);
+    var keydataB64 = window.btoa(keydataS);
+    var keydataB64Pem = formatAsPem(keydataB64);
+    return keydataB64Pem;
+}
+
+function arrayBufferToString( buffer ) {
+    var binary = '';
+    var bytes = new Uint8Array( buffer );
+	var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode( bytes[ i ] );
+    }
+    return binary;
+}
+
+
+function formatAsPem(str) {
+    var finalString = '-----BEGIN RSA PRIVATE KEY-----\n';
+
+    while(str.length > 0) {
+        finalString += str.substring(0, 64) + '\n';
+        str = str.substring(64);
+    }
+
+    finalString = finalString + "-----END RSA PRIVATE KEY-----";
+
+    return finalString;
+}
+
+var key_buffer;
