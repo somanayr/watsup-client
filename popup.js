@@ -2,7 +2,9 @@
 var errorLabelIds = ["error_login", "error_register"];
 //var formIds = ["username_form", "login_form", "register_form"];
 
-function request(url, callback, method, params){
+function request(url, callback, method, params, responseType){
+	
+	if(responseType === undefined) responseType = "";
 
 	if(method === undefined){
 		method = "GET";
@@ -16,6 +18,7 @@ function request(url, callback, method, params){
 	}
 
     var xmlHttp = new XMLHttpRequest();
+	xmlHttp.responseType = responseType;
     xmlHttp.open( method, url, true );
 	xmlHttp.onreadystatechange = function() { 
 		if (xmlHttp.readyState == 4) {
@@ -23,19 +26,13 @@ function request(url, callback, method, params){
 			errorLabelIds.forEach(function(lab) {
 				document.getElementById(lab).textContent = "";
 			});
-			var response;
-			try {
-				response = JSON.parse(xmlHttp.responseText);
-			} catch(e) {
-				if(!(e instanceof SyntaxError)){
-					throw e;
-				}
+			if(responseType !== ""){
 				if(xmlHttp.status == 200) {
-					callback(xmlHttp.responseText, xmlHttp.status);
+					callback(xmlHttp.response, xmlHttp.status);
 				}
-				console.log(xmlHttp.responseText);
 				return;
 			}
+			var response = JSON.parse(xmlHttp.responseText);
 			if(response.Error){
 				var error_label_id = "error" + activeTab.slice(0,-4);
 				document.getElementById(error_label_id).textContent = response.Error;
@@ -80,19 +77,20 @@ document.getElementById("login_button")
 			// ... do something with url variable
 			var username = document.getElementById("login_username").value;
 			request(baseurl + "/auth/", function(response, status){
-				encr_nonce = response;//response.nonce;
-				console.log("Encrypted nonce: " + encr_nonce);
-				var nonce = decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, url.hostname, username)), encr_nonce);
-				console.log("Nonce: " + nonce);
-				request(baseurl + "/login/", function(response, status){
-					console.log("Logged in???")
-					console.log(response);
-					//TODO update plugin status
-					chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-						chrome.runtime.sendMessage({tab: tabs[0]});
-					});
-				}, "POST", {username: username, password: nonce});
-			}, "POST", {username: username});
+				encr_nonce = new Uint8Array(response);//response.nonce;
+				console.log("Encrypted nonce:");console.log(encr_nonce);
+				decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, url.hostname, username)), encr_nonce, function(nonce){
+					console.log("Nonce: " + nonce);
+					request(baseurl + "/login/", function(response, status){
+						console.log("Logged in???")
+						console.log(response);
+						//TODO update plugin status
+						chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+							chrome.runtime.sendMessage({tab: tabs[0]});
+						});
+					}, "POST", {username: username, password: nonce});
+				});
+			}, "POST", {username: username}, "arraybuffer");
 		});
 	});
 
@@ -143,17 +141,49 @@ function derived_keypair(derived_password){
 	return cryptico.generateRSAKey(derived_password, 2048); //1024 is breakable. Keys need to last a long time.
 }
 
-function decrypt_nonce(key, encr_nonce){
-	var hexAr = [];
-	for(var i = 0; i < encr_nonce.length; i++){
-		hexAr.push(encr_nonce.charCodeAt(i).toString(16));
+function decrypt_nonce(key, ciphertext, callback){
+	//var hexAr = [];
+	//for(var i = 0; i < encr_nonce.length; i++){
+	//	hexAr.push(encr_nonce.charCodeAt(i).toString(16));
+	//}
+	//console.log(hexAr.join(""));
+	//return key.decrypt(hexAr.join(""));
+	
+	function url64(n){
+		var s = cryptico.b16to64(n);
+		return s.replace(/\+/g, '-').replace(/\//g, '_').replace(/\=+$/, ''); //https://github.com/diafygi/webcrypto-examples/issues/7
 	}
-	console.log(hexAr.join(""));
-	return key.decrypt(hexAr.join(""));
-	
-	
 	var crypto = window.crypto.subtle;
-	crypto.importKey("raw", key.d)
+	jwk = {
+		kty: "RSA",
+		n:url64(key.n.toString(16)),
+		e:url64(key.e.toString(16)),
+		d:url64(key.d.toString(16)),
+		p:url64(key.p.toString(16)),
+		q:url64(key.q.toString(16)),
+		dp:url64(key.dmp1.toString(16)),
+		dq:url64(key.dmq1.toString(16)),
+		qi:url64(key.coeff.toString(16)),
+		alg: "RSA-OAEP-256",
+        ext: true,
+	};
+	console.log(jwk);
+	crypto.importKey("jwk", jwk, {name: "RSA-OAEP", hash: {name: "SHA-256"}}, false, ["decrypt"]).then(function(mykey){
+		/*var ar = new Uint8Array(cyphertext.length*2);
+		for (var i=0; i<ciphertext.length; i++) {
+			console.log(ciphertext.charCodeAt(i));
+			ar[i*2] = ciphertext.charCodeAt(i);
+			ar[i*2+1] = ciphertext.charCodeAt(i)>>8;
+		}*/
+		console.log(ciphertext);
+		crypto.decrypt("RSA-OAEP", mykey, ciphertext).then(function(plaintext){
+			callback(plaintext);
+		}).catch(function(err){
+			console.error(err);
+		});
+	}).catch(function(err){
+		console.error(err);
+	});
 }
 
 function get_public_key(key) {
