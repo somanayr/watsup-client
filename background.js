@@ -44,13 +44,13 @@ function onUpdate(tab){
 		var color = "#FF0000";
 		var popup = "fail_popup.html"
 		
-		if(status == 200){
+		if(status === 200){
 			txt = "Pass";
 			color = "#00FF00";
 			popup = "login_popup.html";
 		
 		
-			if(response == "logged in"){
+			if(response === "logged in"){
 				txt = "In";
 				color = "#0000FF";
 				popup = "logged_in_popup.html";
@@ -71,6 +71,11 @@ function onUpdate(tab){
 			popup: popup,
 			tabId: tabId
 		});
+		
+		
+		if(status == 200){
+			chrome.tabs.sendMessage(tab.id, {tab: tab});
+		}
 	});
 }
 
@@ -86,7 +91,16 @@ chrome.tabs.onCreated.addListener(function(tab) {
 chrome.runtime.onMessage.addListener(function(msg,sender,callback){
 	if(msg.tab){
 		onUpdate(msg.tab);
+	} else if (msg.req == "tab") {
+		console.log(sender);
+		return callback({tab: sender.tab});
 	}
+});
+
+chrome.browserAction.onClicked.addListener(function(tab) {
+	console.log("Sending mesage: ");
+	console.log(tab);
+	chrome.tabs.sendMessage({tab:tab});
 });
 
 chrome.tabs.query({}, function(tabs) { 

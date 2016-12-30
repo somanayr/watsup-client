@@ -16,15 +16,7 @@ function request(url, callback, method, params){
 	}
 
     var xmlHttp = new XMLHttpRequest();
-    xmlHttp.open( "GET", url, true );
-    if(params && method == "POST"){
-		// http://stackoverflow.com/a/31713191/582136
-		xmlHttp.send(Object.keys(params).map(function(key){
-          return encodeURIComponent(key)+"="+encodeURIComponent(params[key]);
-        }).join("&"));
-	} else {
-		xmlHttp.send(null);
-	}
+    xmlHttp.open( method, url, true );
 	xmlHttp.onreadystatechange = function() { 
 		if (xmlHttp.readyState == 4) {
 			//Reset errors after each exchange:
@@ -41,6 +33,8 @@ function request(url, callback, method, params){
 				if(xmlHttp.status == 200) {
 					callback(xmlHttp.responseText, xmlHttp.status);
 				}
+				console.log(xmlHttp.responseText);
+				return;
 			}
 			if(response.error){
 				var error_label_id = "error" + activeTab.slice(0,-4);
@@ -49,6 +43,15 @@ function request(url, callback, method, params){
 				callback(response, xmlHttp.status);
 			}
 		}
+	}
+    if(params && method == "POST"){
+		xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+		// http://stackoverflow.com/a/31713191/582136
+		xmlHttp.send(Object.keys(params).map(function(key){
+          return encodeURIComponent(key)+"="+encodeURIComponent(params[key]);
+        }).join("&"));
+	} else {
+		xmlHttp.send(null);
 	}
 }
 
@@ -76,8 +79,12 @@ function setFormRegister() {
 	setForm("register_form");
 }*/
 
+chrome.runtime.onMessage.addListener(function(msg){
+	var tab = msg.tab;
+});
+var baseurl = null;
 
-var baseurl=window.location.protocol + "//" + window.location.hostname + "/watsup";
+
 var encr_nonce = "";
 /*document.getElementById("username")
     .addEventListener("keyup", function(event) {
@@ -89,52 +96,84 @@ var encr_nonce = "";
 
 document.getElementById("login_button")
     .addEventListener("click", function(event) {
-		var username = document.getElementById("login_username").value;
-		request(baseurl + "/auth", function(response, status){
-			encr_nonce = response;//response.nonce;
-			var nonce = decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, window.location.hostname, username)), encr_nonce);
-			request(baseurl + "/login", function(response, status){
-				//TODO update plugin status
-				chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-					chrome.runtime.sendMessage({tab: tabs[0]});
-				});
-			}, "POST", {username: username, password: nonce});
-		}, "GET", {username: username});
-});
+		chrome.tabs.query({
+			active: true,               // Select active tabs
+			currentWindow: true     // In the current window
+		}, function(array_of_Tabs) {
+			// Since there can only be one active tab in one active window, 
+			//  the array has only one element
+			var tab = array_of_Tabs[0];
+			// Example:
+			var url = tab.url;
+			var url = new URL(tab.url);
+			baseurl = url.protocol + "//" + url.host + "/watsup";
+			console.log(baseurl);
+			// ... do something with url variable
+			var username = document.getElementById("login_username").value;
+			request(baseurl + "/auth/", function(response, status){
+				encr_nonce = response;//response.nonce;
+				console.log("Encrypted nonce: " + encr_nonce);
+				var nonce = decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, url.hostname, username)), encr_nonce);
+				console.log("Nonce: " + nonce);
+				request(baseurl + "/login/", function(response, status){
+					console.log("Logged in???")
+					console.log(response);
+					//TODO update plugin status
+					chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+						chrome.runtime.sendMessage({tab: tabs[0]});
+					});
+				}, "POST", {username: username, password: nonce});
+			}, "POST", {username: username});
+		});
+	});
 
 document.getElementById("register_button")
     .addEventListener("click", function(event) {
-		var username = document.getElementById("register_username").value;
-		if(document.getElementById("register_password").value != document.getElementById("register_password2").value) {
-			document.getElementById("error_register_pass").textContent = "Passwords do not match";
-			return;
-		}
-		var pubkey = get_public_key(derived_keypair(derived_password(document.getElementById("register_password").value, window.location.hostname, username)));
-		request(baseurl + "/register", function(response, status){
-		}, "POST", {username: username, public_key: pubkey});
-});
+		chrome.tabs.query({
+			active: true,               // Select active tabs
+			currentWindow: true     // In the current window
+		}, function(array_of_Tabs) {
+			// Since there can only be one active tab in one active window, 
+			//  the array has only one element
+			var tab = array_of_Tabs[0];
+			// Example:
+			var url = new URL(tab.url);
+			baseurl = url.protocol + "//" + url.host + "/watsup";
+			console.log(baseurl);
+			
+			var username = document.getElementById("register_username").value;
+			if(document.getElementById("register_password").value != document.getElementById("register_password2").value) {
+				document.getElementById("error_register").textContent = "Passwords do not match";
+				return;
+			}
+			var pubkey = get_public_key(derived_keypair(derived_password(document.getElementById("register_password").value, url.hostname, username)));
+			console.log(pubkey);
+			//return;
+			request(baseurl + "/register/", function(response, status){
+					console.log("Registered???")
+					console.log(response);
+			}, "POST", {username: username, public_key: pubkey});
+		});
+	});
 
 
 //Handles crypto calls
 function derived_password(original_password, hostname, username){
-	var salt = SHA256(hostname) + SHA256(username);
+	console.log(original_password + ", " + hostname + ", " + username);
+	var salt = SHA256(SHA256(hostname) + SHA256(username));
+	console.log("Salt: " + salt);
 	var bits = sjcl.misc.pbkdf2(original_password, salt);
+	console.log(bits);
 	var len = sjcl.bitArray.bitLength(bits);
 	var chars = [];
 	for(var i = 0; i < len; i += 8){
-		chars.push(sjcl.bitArray.bitSlice(bits, i, i+8));
+		console.log(sjcl.bitArray.extract(bits, i, 8));
+		console.log(String.fromCharCode(sjcl.bitArray.extract(bits, i, 8)));
+		chars.push(String.fromCharCode(sjcl.bitArray.extract(bits, i, 8)));
 	}
-	return String.fromCharCode(chars);
-	
-	//FIXME should use PBKDF2 instead; SHA256 is not a key derivation function
-	var salted = SHA256(original_password) + salt
-	var hashed = SHA256(salted);
-	for(var i = 0; i < 50; i++) { //50 iterations
-		hashed = SHA256(hashed + salt);
-	}
-	salted = 0;
-	original_password = 0; //Try to get original password removed from memory ASAP
-	return hashed;
+	console.log(chars);
+	console.log("Derived key: " + (chars).join(""));
+	return (chars).join("");
 }
 
 function derived_keypair(derived_password){
@@ -148,5 +187,5 @@ function decrypt_nonce(key, encr_nonce){
 }
 
 function get_public_key(key) {
-	return cryptico.publicKeyString(key);
+	return "-----BEGIN RSA PUBLIC KEY-----\n" + cryptico.publicKeyString(key) + "\n-----END RSA PUBLIC KEY-----"; 
 }
