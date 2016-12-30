@@ -36,9 +36,9 @@ function request(url, callback, method, params){
 				console.log(xmlHttp.responseText);
 				return;
 			}
-			if(response.error){
+			if(response.Error){
 				var error_label_id = "error" + activeTab.slice(0,-4);
-				document.getElementById(error_label_id).textContent = response.error;
+				document.getElementById(error_label_id).textContent = response.Error;
 			} else {
 				callback(response, xmlHttp.status);
 			}
@@ -55,30 +55,6 @@ function request(url, callback, method, params){
 	}
 }
 
-/*function setForm(name) {
-	activeForm = name;
-	document.getElementById(name).style.display="block";
-	formIds.forEach(function(f) {
-		f.style.display="none";
-	});
-}
-
-function setFormUsername() {
-	setForm("username_form");
-	document.getElementById("username").value = "";
-	document.getElementById("login_password").value = "";
-	document.getElementById("register_password").value = "";
-	document.getElementById("register_password2").value = "";
-}
-
-function setFormLogin() {
-	setForm("login_form");
-}
-
-function setFormRegister() {
-	setForm("register_form");
-}*/
-
 chrome.runtime.onMessage.addListener(function(msg){
 	var tab = msg.tab;
 });
@@ -86,13 +62,6 @@ var baseurl = null;
 
 
 var encr_nonce = "";
-/*document.getElementById("username")
-    .addEventListener("keyup", function(event) {
-		event.preventDefault();
-		if (event.keyCode == 13) {
-			document.getElementById(username_action).click();
-		}
-});*/
 
 document.getElementById("login_button")
     .addEventListener("click", function(event) {
@@ -159,20 +128,14 @@ document.getElementById("register_button")
 
 //Handles crypto calls
 function derived_password(original_password, hostname, username){
-	console.log(original_password + ", " + hostname + ", " + username);
+	//TODO: switch to window.crypto
 	var salt = SHA256(SHA256(hostname) + SHA256(username));
-	console.log("Salt: " + salt);
 	var bits = sjcl.misc.pbkdf2(original_password, salt);
-	console.log(bits);
 	var len = sjcl.bitArray.bitLength(bits);
 	var chars = [];
 	for(var i = 0; i < len; i += 8){
-		console.log(sjcl.bitArray.extract(bits, i, 8));
-		console.log(String.fromCharCode(sjcl.bitArray.extract(bits, i, 8)));
 		chars.push(String.fromCharCode(sjcl.bitArray.extract(bits, i, 8)));
 	}
-	console.log(chars);
-	console.log("Derived key: " + (chars).join(""));
 	return (chars).join("");
 }
 
@@ -181,11 +144,34 @@ function derived_keypair(derived_password){
 }
 
 function decrypt_nonce(key, encr_nonce){
-	var status = cryptico.decrypt(encr_nonce, key);
-	//TODO: use signature to verify integrity
-	return status.plaintext;
+	var hexAr = [];
+	for(var i = 0; i < encr_nonce.length; i++){
+		hexAr.push(encr_nonce.charCodeAt(i).toString(16));
+	}
+	console.log(hexAr.join(""));
+	return key.decrypt(hexAr.join(""));
+	
+	
+	var crypto = window.crypto.subtle;
+	crypto.importKey("raw", key.d)
 }
 
 function get_public_key(key) {
-	return "-----BEGIN RSA PUBLIC KEY-----\n" + cryptico.publicKeyString(key) + "\n-----END RSA PUBLIC KEY-----"; 
+	function padHexTo(hex, len) {return (Array(11).join("0")+hex).substr(-len);}
+	
+	
+	var n = key.n.toString(16);
+	var e = key.e.toString(16);
+	if(n.length % 2 == 1) n = "0" + n;
+	else n = "00" + n;
+	if(e.length % 2 == 1) e = "0" + e;
+	var base16key = "3082" + padHexTo(((n.length/2)+(e.length/2)+6).toString(16),4) + "0282" + padHexTo((n.length/2).toString(16),4) + n + "02" + padHexTo((e.length/2).toString(16),2) + e;
+	console.log(["3082", padHexTo(((n.length/2)+(e.length/2)+6).toString(16),4), "0282" + padHexTo((n.length/2).toString(16),4), 0, "02", padHexTo((e.length/2).toString(16),2),e].join("\n"));
+	
+	var key = cryptico.b16to64(base16key);
+	var spacedKey = "";
+	for(var i = 0; i <= key.length; i+=63){
+		spacedKey += key.substring(i, Math.min(key.length,i+63)) + "\n";
+	}
+	return "-----BEGIN RSA PUBLIC KEY-----\n" + spacedKey + "-----END RSA PUBLIC KEY-----"; 
 }
