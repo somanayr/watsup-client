@@ -192,7 +192,7 @@ function decrypt_nonce(key, ciphertext, callback){
 			for(var i = 0; i < plaintext.length; i++){
 				chars.push(String.fromCharCode(plaintext[i]));
 			}
-			callback(plaintext.join(""));
+			callback(chars.join(""));
 		}).catch(function(err){
 			console.error(err);
 		});
