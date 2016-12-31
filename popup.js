@@ -29,6 +29,10 @@ function request(url, callback, method, params, responseType){
 			if(responseType !== ""){
 				if(xmlHttp.status == 200) {
 					callback(xmlHttp.response, xmlHttp.status);
+				} else {
+					document.getElementById("error_login").textContent = "Unknown error";
+					document.getElementById("error_register").textContent = "Unknown error";
+					processing(false);
 				}
 				return;
 			}
@@ -36,6 +40,7 @@ function request(url, callback, method, params, responseType){
 			if(response.Error){
 				document.getElementById("error_login").textContent = response.Error;
 				document.getElementById("error_register").textContent = response.Error;
+				processing(false);
 			} else {
 				callback(response, xmlHttp.status);
 			}
@@ -62,29 +67,35 @@ var encr_nonce = "";
 
 document.getElementById("login_button")
     .addEventListener("click", function(event) {
-		chrome.tabs.query({
-			active: true,               // Select active tabs
-			currentWindow: true     // In the current window
-		}, function(array_of_Tabs) {
-			// Since there can only be one active tab in one active window, 
-			//  the array has only one element
-			var tab = array_of_Tabs[0];
-			// Example:
-			var url = tab.url;
+		processing(true);
+		chrome.tabs.query({active: true,currentWindow: true}, function(tabs) {
+			var tab = tabs[0];
 			var url = new URL(tab.url);
 			baseurl = url.protocol + "//" + url.host + "/watsup";
 			console.log(baseurl);
-			// ... do something with url variable
 			var username = document.getElementById("login_username").value;
 			request(baseurl + "/auth/", function(response, status){
 				encr_nonce = new Uint8Array(response);//response.nonce;
 				console.log("Encrypted nonce:");console.log(encr_nonce);
-				decrypt_nonce(derived_keypair(derived_password(document.getElementById("login_password").value, url.hostname, username)), encr_nonce, function(nonce){
+				derived_password(document.getElementById("login_password").value, url.hostname, username).then(function(pass){
+					console.log("Pass: " + pass);
+					return decrypt_nonce(derived_keypair(pass), encr_nonce);
+				}).then(function(nonce){
+					if(nonce === undefined){
+						console.log("Undefined nonce; failed to decrypt.");
+						document.getElementById("error_login").textContent = "Wrong username/password";
+						processing(false);
+						return;
+					}
 					console.log("Nonce: ");
 					console.log(nonce);
 					request(baseurl + "/login/", function(response, status){
 						console.log("Logged in???")
 						console.log(response);
+						//TODO response actions -- redirect, reload, nothing
+						document.getElementById("error_login").textContent = "Successfully logged in!";
+						processing(false);
+						
 						//TODO update plugin status
 						chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
 							chrome.runtime.sendMessage({tab: tabs[0]});
@@ -97,36 +108,73 @@ document.getElementById("login_button")
 
 document.getElementById("register_button")
     .addEventListener("click", function(event) {
-		chrome.tabs.query({
-			active: true,               // Select active tabs
-			currentWindow: true     // In the current window
-		}, function(array_of_Tabs) {
-			// Since there can only be one active tab in one active window, 
-			//  the array has only one element
-			var tab = array_of_Tabs[0];
-			// Example:
+		processing(true);
+		chrome.tabs.query({active: true,currentWindow: true}, function(tabs) {
+			var tab = tabs[0];
 			var url = new URL(tab.url);
 			baseurl = url.protocol + "//" + url.host + "/watsup";
-			console.log(baseurl);
 			
 			var username = document.getElementById("register_username").value;
 			if(document.getElementById("register_password").value != document.getElementById("register_password2").value) {
 				document.getElementById("error_register").textContent = "Passwords do not match";
+				processing(false);
 				return;
 			}
-			var pubkey = get_public_key(derived_keypair(derived_password(document.getElementById("register_password").value, url.hostname, username)));
-			console.log(pubkey);
-			//return;
-			request(baseurl + "/register/", function(response, status){
-					console.log("Registered???")
+			derived_password(document.getElementById("register_password").value, url.hostname, username).then(function(pass){
+				return Promise.resolve(derived_keypair(pass));
+			}).then(function(key) {
+				if(key === undefined){
+					document.getElementById("error_login").textContent = "Unknown error";
+					document.getElementById("error_register").textContent = "Unknown error";
+					processing(false);
+					return;
+				}
+				var pubkey = get_public_key(key);
+				request(baseurl + "/register/", function(response, status){
+					document.getElementById("login_tab_button").click();
+					//TODO add user feedback
 					console.log(response);
-			}, "POST", {username: username, public_key: pubkey});
+					//TODO response actions -- redirect, reload, nothing
+					document.getElementById("error_login").textContent = "Successfully registered!";
+					processing(false);
+				}, "POST", {username: username, public_key: pubkey});
+			});
 		});
 	});
 
 
+function processing(start){
+	var elems = document.getElementsByClassName("loading");
+	for (var i = 0; i < elems.length; i++){
+		if(start){
+			elems[i].className += " active";
+		} else {
+			elems[i].className = elems[i].className.replace(" active", "");
+		}
+	};
+}
+	
 //Handles crypto calls
 function derived_password(original_password, hostname, username){
+	var salt = getUint8Buffer(SHA256(SHA256(hostname) + SHA256(username)));
+	
+	return crypto.subtle.importKey(
+		"raw",
+		getUint8Buffer(original_password),
+		{ "name": "PBKDF2" },
+		false,
+		["deriveBits"]
+	).then(function (key){
+		console.log(key);
+		return crypto.subtle.deriveBits({"name": "PBKDF2",salt: salt,iterations: 1000,hash: {name: "SHA-256"}},key,256)
+	}).then(function(bits){
+		var bytes = new Uint8Array(bits);
+		var chars = [];
+		for(var i = 0; i < bytes.length; i++){
+			chars.push(String.fromCharCode(bytes[i]));
+		}
+		return Promise.resolve(chars.join(""));
+	});
 	//TODO: switch to window.crypto
 	var salt = SHA256(SHA256(hostname) + SHA256(username));
 	var bits = sjcl.misc.pbkdf2(original_password, salt);
@@ -142,13 +190,7 @@ function derived_keypair(derived_password){
 	return cryptico.generateRSAKey(derived_password, 2048); //1024 is breakable. Keys need to last a long time.
 }
 
-function decrypt_nonce(key, ciphertext, callback){
-	//var hexAr = [];
-	//for(var i = 0; i < encr_nonce.length; i++){
-	//	hexAr.push(encr_nonce.charCodeAt(i).toString(16));
-	//}
-	//console.log(hexAr.join(""));
-	//return key.decrypt(hexAr.join(""));
+function decrypt_nonce(key, ciphertext){
 	
 	function url64(n){
 		var s = cryptico.b16to64(n);
@@ -168,40 +210,23 @@ function decrypt_nonce(key, ciphertext, callback){
 		alg: "RSA-OAEP",
         ext: true,
 	};
-	console.log(jwk);
-	crypto.importKey("jwk", jwk, {name: "RSA-OAEP", hash: {name: "SHA-1"}}, true, ["decrypt"]).then(function(mykey){
-		/*var ar = new Uint8Array(cyphertext.length*2);
-		for (var i=0; i<ciphertext.length; i++) {
-			console.log(ciphertext.charCodeAt(i));
-			ar[i*2] = ciphertext.charCodeAt(i);
-			ar[i*2+1] = ciphertext.charCodeAt(i)>>8;
-		}*/
-		window.crypto.subtle.exportKey("pkcs8",mykey).then(function(key_buf){
-			key_buffer = key_buf;
-			console.log(spkiToPEM(key_buffer));
-		});
-		console.log(ciphertext);
-		var buf = [];
-		for(var i = 0; i < ciphertext.length; i++){
-			buf.push((Array(2).join("0") + ciphertext[i].toString(16)).substr(-2))
-		}
-		console.log(cryptico.b16to64(buf.join("")));
-		crypto.decrypt({name: "RSA-OAEP", hash: {name: "SHA-1"}}, mykey, ciphertext).then(function(_plaintext){
-			var chars = [];
-			var plaintext = new Uint8Array(_plaintext);
-			for(var i = 0; i < plaintext.length; i++){
-				chars.push(String.fromCharCode(plaintext[i]));
+	return crypto.importKey("jwk", jwk, {name: "RSA-OAEP", hash: {name: "SHA-1"}}, true, ["decrypt"]).then(function(mykey){
+		return crypto.decrypt({name: "RSA-OAEP", hash: {name: "SHA-1"}}, mykey, ciphertext).then(function(_plaintext){
+			try{
+				var chars = [];
+				var plaintext = new Uint8Array(_plaintext);
+				for(var i = 0; i < plaintext.length; i++){
+					chars.push(String.fromCharCode(plaintext[i]));
+				}
+				return Promise.resolve(chars.join(""));
+			} catch (err){
+				console.error(err);
 			}
-			callback(chars.join(""));
-		}).catch(function(err){
-			console.error(err);
-		});
-	}).catch(function(err){
-		console.error(err);
-		console.error(err.stack);
-	});
+		}, function(err){console.error(err);});
+	}, function(err){console.error(err);});
 }
 
+//Returns PEM formatted public key
 function get_public_key(key) {
 	function padHexTo(hex, len) {return (Array(11).join("0")+hex).substr(-len);}
 	
@@ -212,7 +237,6 @@ function get_public_key(key) {
 	else n = "00" + n;
 	if(e.length % 2 == 1) e = "0" + e;
 	var base16key = "3082" + padHexTo(((n.length/2)+(e.length/2)+6).toString(16),4) + "0282" + padHexTo((n.length/2).toString(16),4) + n + "02" + padHexTo((e.length/2).toString(16),2) + e;
-	console.log(["3082", padHexTo(((n.length/2)+(e.length/2)+6).toString(16),4), "0282" + padHexTo((n.length/2).toString(16),4), 0, "02", padHexTo((e.length/2).toString(16),2),e].join("\n"));
 	
 	var key = cryptico.b16to64(base16key);
 	var spacedKey = "";
@@ -222,36 +246,10 @@ function get_public_key(key) {
 	return "-----BEGIN RSA PUBLIC KEY-----\n" + spacedKey + "-----END RSA PUBLIC KEY-----"; 
 }
 
-
-function spkiToPEM(keydata){
-    var keydataS = arrayBufferToString(keydata);
-    var keydataB64 = window.btoa(keydataS);
-    var keydataB64Pem = formatAsPem(keydataB64);
-    return keydataB64Pem;
+function getUint8Buffer(s){
+	var buf = new Uint8Array(s.length);
+	for(var i = 0; i < s.length; i++){
+		buf[i] = s.charCodeAt(i);
+	}
+	return buf;
 }
-
-function arrayBufferToString( buffer ) {
-    var binary = '';
-    var bytes = new Uint8Array( buffer );
-	var len = bytes.byteLength;
-    for (var i = 0; i < len; i++) {
-        binary += String.fromCharCode( bytes[ i ] );
-    }
-    return binary;
-}
-
-
-function formatAsPem(str) {
-    var finalString = '-----BEGIN RSA PRIVATE KEY-----\n';
-
-    while(str.length > 0) {
-        finalString += str.substring(0, 64) + '\n';
-        str = str.substring(64);
-    }
-
-    finalString = finalString + "-----END RSA PRIVATE KEY-----";
-
-    return finalString;
-}
-
-var key_buffer;

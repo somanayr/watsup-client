@@ -45,3 +45,14 @@ input {
 	float:right;
     clear:both;
 }
+
+img.loading {
+	display: none;
+	width: 30;
+	height: 30;
+}
+
+img.active {
+	display: block;
+	float: right;
+}

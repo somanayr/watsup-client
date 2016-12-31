@@ -1,6 +1,6 @@
 //http://www.w3schools.com/howto/howto_js_tabs.asp
 function openTab(evt, tabName) {
-	console.log("Opening tab: " + tabId);
+	console.log("Opening tab: " + tabName);
     // Declare all variables
     var i, tabcontent, tablinks;
 
