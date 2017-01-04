@@ -21,6 +21,7 @@ function watsupGet(url, callback, params){
 
 function onUpdate(tab){
 	
+	//First we set the tab to a "waiting" state
 	var tabId = tab.id;
 	chrome.browserAction.setBadgeText({
 		text: "...",
@@ -37,26 +38,28 @@ function onUpdate(tab){
 		tabId: tabId
 	});
 	
+	//Then we try to figure out the status of WATSUP on the server
 	var u = new URL(tab.url);
-	var watsupUrl = u.protocol + "//" + u.hostname + "/watsup/"; //fixme
+	var watsupUrl = u.protocol + "//" + u.hostname + "/watsup/"; //FIXME how should we verify?
 	watsupGet(watsupUrl, function(response, status) {
-		var txt = "Fail";
+		var txt = "Fail"; //Default to "failed" state
 		var color = "#FF0000";
 		var popup = "fail_popup.html"
 		
-		if(status === 200){
-			txt = "Pass";
+		if(status === 200){ //If got status 200, read that as the server implements WATSUP
+			txt = "Pass"; //Set success, but not logged in state
 			color = "#00FF00";
 			popup = "login_popup.html";
 		
 		
-			if(response === "logged in"){
-				txt = "In";
+			if(response === "logged in"){ //If we are told we're logged in, read that as we're logged in
+				txt = "In"; //Set logged in
 				color = "#0000FF";
 				popup = "logged_in_popup.html";
 			}
 		}
 		
+		//Here we actually update the browser action state
 		chrome.browserAction.setBadgeText({
 			text: txt,
 			tabId: tabId
@@ -79,31 +82,22 @@ function onUpdate(tab){
 	});
 }
 
-
-chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+/* Set up conditions on which we update tab state */
+chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) { //When a tab is updated
 	onUpdate(tab);
 });
 
-chrome.tabs.onCreated.addListener(function(tab) {         
+chrome.tabs.onCreated.addListener(function(tab) { //When a tab is created
    onUpdate(tab);
 });
 
-chrome.runtime.onMessage.addListener(function(msg,sender,callback){
+chrome.runtime.onMessage.addListener(function(msg,sender,callback){ //When we're asked to (by the BrowserAction popup)
 	if(msg.tab){
 		onUpdate(msg.tab);
-	} else if (msg.req == "tab") {
-		console.log(sender);
-		return callback({tab: sender.tab});
 	}
 });
 
-chrome.browserAction.onClicked.addListener(function(tab) {
-	console.log("Sending mesage: ");
-	console.log(tab);
-	chrome.tabs.sendMessage({tab:tab});
-});
-
-chrome.tabs.query({}, function(tabs) { 
+chrome.tabs.query({}, function(tabs) { //Also update every tab when the application launches
 	tabs.forEach(function(tab) {
 		onUpdate(tab);
 	});

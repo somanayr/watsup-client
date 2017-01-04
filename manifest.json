@@ -16,12 +16,5 @@
 	
 	"background": {
 		"scripts": ["background.js"]
-	},
-
-	"content_scripts_": [
-		{
-			"matches": ["<all_urls>"],
-			"js": ["watsup-content.js", "cryptico.min.js", "sjcl.js"]
-		}
-	]
+	}
 }

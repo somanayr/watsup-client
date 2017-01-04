@@ -21,12 +21,9 @@ function openTab(evt, tabName) {
     evt.currentTarget.className += " active";
 }
 var activeTab = "";
-// Get all elements with class="tablinks" and remove the class "active"
 var tablinks = document.getElementsByClassName("tablinks");
 for (i = 0; i < tablinks.length; i++) {
 	var tabId = tablinks[i].id.slice(0,-7);
-	//console.log("Adding for tab: " + tabId);
-	//console.log(tablinks[i]);
 	(function (tabId) {tablinks[i].addEventListener("click",function(evt) {
 		openTab(evt, tabId);
 		activeTab = tabId; return false;
