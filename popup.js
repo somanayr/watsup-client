@@ -112,6 +112,9 @@ document.getElementById("login_button")
 						document.getElementById("error_login").textContent = "Successfully logged in!";
 						processing(false);
 						
+						//"action": "reload"
+						//"action": "redirect", "url": "<url>"
+						
 						//Tell background.js to re-evaluate this tab's WATSUP status
 						chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
 							chrome.runtime.sendMessage({tab: tabs[0]});
@@ -160,6 +163,9 @@ document.getElementById("register_button")
 					document.getElementById("error_login").textContent = "Successfully registered!";
 					processing(false);
 					//TODO response actions -- redirect, reload, nothing
+						
+					//"action": "reload"
+					//"action": "redirect", "url": "<url>"
 				}, "POST", {username: username, public_key: pubkey});
 			});
 		});

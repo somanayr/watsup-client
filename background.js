@@ -40,7 +40,7 @@ function onUpdate(tab){
 	
 	//Then we try to figure out the status of WATSUP on the server
 	var u = new URL(tab.url);
-	var watsupUrl = u.protocol + "//" + u.hostname + "/watsup/"; //FIXME how should we verify?
+	var watsupUrl = u.protocol + "//" + u.hostname + "/watsup/status/"; //FIXME how should we verify?
 	watsupGet(watsupUrl, function(response, status) {
 		var txt = "Fail"; //Default to "failed" state
 		var color = "#FF0000";
